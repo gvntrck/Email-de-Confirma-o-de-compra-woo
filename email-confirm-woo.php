@@ -2,7 +2,7 @@
 /*
 Plugin Name: Email de Confirmação de Inscrição por Produto
 Description: Envia emails personalizados para diferentes produtos quando o pedido é marcado como concluído
-Version: 1.3
+Version: 1.4
 Author: Gvntrck
 Requires PHP: 7.4
 */
@@ -135,6 +135,11 @@ class Custom_Confirmation_Emails {
                                     data-content="<?php echo esc_attr($config['content']); ?>">
                                 Editar
                             </button>
+                            <button type="button" class="button test-config" data-product-id="<?php echo $product_id; ?>"
+                                    data-subject="<?php echo esc_attr($config['subject']); ?>"
+                                    data-content="<?php echo esc_attr($config['content']); ?>">
+                                Teste
+                            </button>
                             <a href="#" class="button delete-config" data-product-id="<?php echo $product_id; ?>">Excluir</a>
                         </td>
                     </tr>
@@ -158,6 +163,30 @@ class Custom_Confirmation_Emails {
                             <textarea id="edit_content" name="edit_content" rows="15" style="width: 100%" required></textarea>
                         </div>
                         <input type="submit" name="edit_config" class="button button-primary" value="Salvar Alterações">
+                    </form>
+                </div>
+            </div>
+
+            <!-- Modal de Teste -->
+            <div id="test-modal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+                <div class="modal-content" style="background-color: #fff; margin: 10% auto; padding: 20px; width: 50%; max-width: 500px; position: relative;">
+                    <span class="close-test-modal" style="position: absolute; right: 10px; top: 5px; font-size: 20px; cursor: pointer;">&times;</span>
+                    <h2>Enviar Email de Teste</h2>
+                    <div id="test-response-message"></div>
+                    <form id="test-email-form">
+                        <input type="hidden" id="test_product_id" name="test_product_id">
+                        <input type="hidden" id="test_subject" name="test_subject">
+                        <input type="hidden" id="test_content" name="test_content">
+                        
+                        <div class="form-field">
+                            <label for="test_email_address">Email para envio:</label>
+                            <input type="email" id="test_email_address" name="test_email_address" style="width: 100%" required placeholder="exemplo@email.com">
+                        </div>
+                        
+                        <div style="margin-top: 15px;">
+                            <button type="submit" class="button button-primary">Enviar Teste</button>
+                            <span class="spinner" style="float: none; margin: 0 10px;"></span>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -203,6 +232,69 @@ class Custom_Confirmation_Emails {
                     if ($(e.target).is('#edit-modal')) {
                         $('#edit-modal').hide();
                     }
+                    if ($(e.target).is('#test-modal')) {
+                        $('#test-modal').hide();
+                    }
+                });
+
+                // --- Lógica do Modal de Teste ---
+
+                // Abrir modal de teste
+                $('.test-config').on('click', function() {
+                    var productId = $(this).data('product-id');
+                    var subject = $(this).data('subject');
+                    var content = $(this).data('content');
+
+                    $('#test_product_id').val(productId);
+                    $('#test_subject').val(subject);
+                    $('#test_content').val(content);
+                    $('#test_email_address').val(''); // Limpa email anterior
+                    $('#test-response-message').html(''); // Limpa mensagens anteriores
+                    $('#test-modal').show();
+                });
+
+                // Fechar modal de teste
+                $('.close-test-modal').on('click', function() {
+                    $('#test-modal').hide();
+                });
+
+                // Enviar email de teste via AJAX
+                $('#test-email-form').on('submit', function(e) {
+                    e.preventDefault();
+                    
+                    var $form = $(this);
+                    var $submitBtn = $form.find('button[type="submit"]');
+                    var $spinner = $form.find('.spinner');
+                    
+                    $submitBtn.prop('disabled', true);
+                    $spinner.addClass('is-active');
+                    $('#test-response-message').html('');
+
+                    var data = {
+                        action: 'send_test_email_config',
+                        security: '<?php echo wp_create_nonce('send_test_email_config'); ?>',
+                        email: $('#test_email_address').val(),
+                        subject: $('#test_subject').val(),
+                        content: $('#test_content').val()
+                    };
+
+                    $.post(ajaxurl, data, function(response) {
+                        $submitBtn.prop('disabled', false);
+                        $spinner.removeClass('is-active');
+                        
+                        if (response.success) {
+                            $('#test-response-message').html('<div class="notice notice-success inline"><p>' + response.data + '</p></div>');
+                            setTimeout(function() {
+                                $('#test-modal').hide();
+                            }, 2000);
+                        } else {
+                            $('#test-response-message').html('<div class="notice notice-error inline"><p>' + (response.data || 'Erro ao enviar email.') + '</p></div>');
+                        }
+                    }).fail(function() {
+                        $submitBtn.prop('disabled', false);
+                        $spinner.removeClass('is-active');
+                        $('#test-response-message').html('<div class="notice notice-error inline"><p>Erro de conexão. Tente novamente.</p></div>');
+                    });
                 });
             });
         </script>
@@ -225,8 +317,17 @@ class Custom_Confirmation_Emails {
                 border-radius: 4px;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             }
-            .close-modal:hover {
+            .close-modal:hover, .close-test-modal:hover {
                 color: #666;
+            }
+            /* Ajuste para spinner do WP */
+            .spinner {
+                float: none;
+                margin: 0 10px;
+                visibility: hidden;
+            }
+            .spinner.is-active {
+                visibility: visible;
             }
         </style>
         <?php
@@ -283,9 +384,40 @@ class Custom_Confirmation_Emails {
         wp_die();
     }
 
+    // Ajax para enviar email de teste
+    public static function send_test_email_config() {
+        check_ajax_referer('send_test_email_config', 'security');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Acesso negado');
+        }
+
+        $email = sanitize_email($_POST['email']);
+        $subject = sanitize_text_field($_POST['subject']);
+        $content = wp_kses_post($_POST['content']);
+
+        if (!is_email($email)) {
+            wp_send_json_error('Email inválido.');
+        }
+
+        $headers = array(
+            'Content-Type: text/html; charset=UTF-8',
+            'From: Rio Chess Open <noreply@riochessopen.com>'
+        );
+
+        $sent = wp_mail($email, $subject, $content, $headers);
+
+        if ($sent) {
+            wp_send_json_success('Email de teste enviado com sucesso!');
+        } else {
+            wp_send_json_error('Falha ao enviar o email. Verifique as configurações do servidor.');
+        }
+    }
+
 }
 
 new Custom_Confirmation_Emails();
 
 // Registrar ajax
 add_action('wp_ajax_delete_email_config', array('Custom_Confirmation_Emails', 'delete_email_config'));
+add_action('wp_ajax_send_test_email_config', array('Custom_Confirmation_Emails', 'send_test_email_config'));
