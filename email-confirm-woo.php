@@ -2,7 +2,7 @@
 /*
 Plugin Name: Email de Confirmação de Inscrição por Produto
 Description: Envia emails personalizados para diferentes produtos quando o pedido é marcado como concluído
-Version: 1.5
+Version: 1.6
 Author: Gvntrck
 Requires PHP: 7.4
 */
@@ -377,9 +377,25 @@ class Custom_Confirmation_Emails {
         $message = str_replace(array_keys($replacements), array_values($replacements), $config['content']);
         
         // Garantir que o conteúdo seja tratado como HTML
+        $site_title = get_bloginfo('name');
+        $admin_email = get_option('admin_email');
+        
+        // Tentar pegar configurações do WooCommerce se disponíveis
+        if (function_exists('WC')) {
+            $woo_from_name = get_option('woocommerce_email_from_name');
+            $woo_from_email = get_option('woocommerce_email_from_address');
+            
+            if (!empty($woo_from_name)) {
+                $site_title = $woo_from_name;
+            }
+            if (!empty($woo_from_email)) {
+                $admin_email = $woo_from_email;
+            }
+        }
+
         $headers = array(
             'Content-Type: text/html; charset=UTF-8',
-            'From: Rio Chess Open <noreply@riochessopen.com>'
+            'From: ' . $site_title . ' <' . $admin_email . '>'
         );
 
         wp_mail($to, $subject, $message, $headers);
@@ -429,9 +445,25 @@ class Custom_Confirmation_Emails {
         $subject = str_replace(array_keys($replacements), array_values($replacements), $subject_raw);
         $content = str_replace(array_keys($replacements), array_values($replacements), $content_raw);
 
+        $site_title = get_bloginfo('name');
+        $admin_email = get_option('admin_email');
+        
+        // Tentar pegar configurações do WooCommerce se disponíveis
+        if (function_exists('WC')) {
+            $woo_from_name = get_option('woocommerce_email_from_name');
+            $woo_from_email = get_option('woocommerce_email_from_address');
+            
+            if (!empty($woo_from_name)) {
+                $site_title = $woo_from_name;
+            }
+            if (!empty($woo_from_email)) {
+                $admin_email = $woo_from_email;
+            }
+        }
+
         $headers = array(
             'Content-Type: text/html; charset=UTF-8',
-            'From: Rio Chess Open <noreply@riochessopen.com>'
+            'From: ' . $site_title . ' <' . $admin_email . '>'
         );
 
         $sent = wp_mail($email, $subject, $content, $headers);
