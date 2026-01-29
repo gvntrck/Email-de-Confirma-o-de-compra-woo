@@ -2,7 +2,7 @@
 /*
 Plugin Name: Email de Confirmação de Inscrição por Produto
 Description: Envia emails personalizados para diferentes produtos quando o pedido é marcado como concluído
-Version: 1.7
+Version: 1.8
 Author: Gvntrck
 Requires PHP: 7.4
 */
@@ -15,6 +15,29 @@ class Custom_Confirmation_Emails {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
         add_action('woocommerce_order_status_completed', array($this, 'send_custom_emails'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+    }
+
+    // Enfileira assets do admin
+    public function enqueue_admin_assets($hook) {
+        if (strpos($hook, 'custom-confirmation-emails') === false) {
+            return;
+        }
+
+        $settings = wp_enqueue_code_editor(array('type' => 'text/html'));
+        
+        if (false !== $settings) {
+            wp_localize_script('jquery', 'cm_settings', $settings);
+            
+            // Adiciona estilos para corrigir altura do editor se necessário
+            wp_add_inline_style('code-editor', '
+                .CodeMirror { 
+                    border: 1px solid #ddd;
+                    height: auto;
+                    min-height: 300px;
+                }
+            ');
+        }
     }
 
     // Adiciona menu de administração
@@ -200,6 +223,26 @@ class Custom_Confirmation_Emails {
 
         <script>
             jQuery(document).ready(function($) {
+                // Inicializar CodeMirror
+                var newEditor, editEditor;
+                
+                if (typeof cm_settings !== 'undefined' && wp.codeEditor) {
+                    newEditor = wp.codeEditor.initialize($('#new_content'), cm_settings);
+                    editEditor = wp.codeEditor.initialize($('#edit_content'), cm_settings);
+                    
+                    // Sincronizar ao digitar (embora o wp.codeEditor geralmente faça isso no submit)
+                    if (newEditor.codemirror) {
+                        newEditor.codemirror.on('change', function(cm) {
+                            cm.save();
+                        });
+                    }
+                    if (editEditor.codemirror) {
+                        editEditor.codemirror.on('change', function(cm) {
+                            cm.save();
+                        });
+                    }
+                }
+
                 // Deletar configuração
                 $('.delete-config').on('click', function(e) {
                     e.preventDefault();
@@ -225,7 +268,18 @@ class Custom_Confirmation_Emails {
                     $('#edit_product_id').val(productId);
                     $('#edit_subject').val(subject);
                     $('#edit_content').val(content);
+                    
+                    // Atualizar CodeMirror
+                    if (editEditor && editEditor.codemirror) {
+                        editEditor.codemirror.setValue(content);
+                    }
+
                     $('#edit-modal').show();
+
+                    // Refresh necessário para o CodeMirror renderizar corretamente em elemento que estava oculto
+                    if (editEditor && editEditor.codemirror) {
+                        editEditor.codemirror.refresh();
+                    }
                 });
 
                 // Fechar modal
