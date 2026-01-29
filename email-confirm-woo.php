@@ -2,7 +2,7 @@
 /*
 Plugin Name: Email de Confirmação de Inscrição por Produto
 Description: Envia emails personalizados para diferentes produtos quando o pedido é marcado como concluído
-Version: 1.4
+Version: 1.5
 Author: Gvntrck
 Requires PHP: 7.4
 */
@@ -107,6 +107,9 @@ class Custom_Confirmation_Emails {
                     
                     <div class="form-field">
                         <label for="new_content">Conteúdo do Email (HTML)</label>
+                        <p class="description" style="margin-bottom: 5px; color: #666; font-size: 13px;">
+                            Você pode usar os seguintes placeholders: <code>{nomedocomprador}</code> e <code>{nomeproduto}</code>.
+                        </p>
                         <textarea id="new_content" name="new_content" rows="10" style="width: 100%" required></textarea>
                     </div>
                     
@@ -160,6 +163,9 @@ class Custom_Confirmation_Emails {
                         </div>
                         <div class="form-field">
                             <label for="edit_content">Conteúdo do Email (HTML)</label>
+                            <p class="description" style="margin-bottom: 5px; color: #666; font-size: 13px;">
+                                Você pode usar os seguintes placeholders: <code>{nomedocomprador}</code> e <code>{nomeproduto}</code>.
+                            </p>
                             <textarea id="edit_content" name="edit_content" rows="15" style="width: 100%" required></textarea>
                         </div>
                         <input type="submit" name="edit_config" class="button button-primary" value="Salvar Alterações">
@@ -345,16 +351,30 @@ class Custom_Confirmation_Emails {
             $product_id = $product->is_type('variation') ? $product->get_parent_id() : $product->get_id();
 
             if (isset($configs[$product_id]) && !get_post_meta($order_id, '_email_enviado_'.$product_id, true)) {
-                $this->send_email($order, $configs[$product_id]);
+                $this->send_email($order, $configs[$product_id], $product->get_name());
                 update_post_meta($order_id, '_email_enviado_'.$product_id, 'yes');
             }
         }
     }
 
-    private function send_email($order, $config) {
+    private function send_email($order, $config, $product_name) {
         $to = $order->get_billing_email();
-        $subject = $config['subject'];
-        $message = $config['content'];
+        
+        // Dados para substituição
+        $first_name = $order->get_billing_first_name();
+        $last_name = $order->get_billing_last_name();
+        $buyer_name = trim($first_name . ' ' . $last_name);
+        if (empty($buyer_name)) {
+            $buyer_name = 'Cliente';
+        }
+
+        $replacements = array(
+            '{nomedocomprador}' => $buyer_name,
+            '{nomeproduto}' => $product_name
+        );
+
+        $subject = str_replace(array_keys($replacements), array_values($replacements), $config['subject']);
+        $message = str_replace(array_keys($replacements), array_values($replacements), $config['content']);
         
         // Garantir que o conteúdo seja tratado como HTML
         $headers = array(
@@ -393,12 +413,21 @@ class Custom_Confirmation_Emails {
         }
 
         $email = sanitize_email($_POST['email']);
-        $subject = sanitize_text_field($_POST['subject']);
-        $content = wp_kses_post($_POST['content']);
+        $subject_raw = sanitize_text_field($_POST['subject']);
+        $content_raw = wp_kses_post($_POST['content']);
 
         if (!is_email($email)) {
             wp_send_json_error('Email inválido.');
         }
+
+        // Dados fictícios para teste
+        $replacements = array(
+            '{nomedocomprador}' => 'Fulano de Tal',
+            '{nomeproduto}' => 'Produto de Teste'
+        );
+
+        $subject = str_replace(array_keys($replacements), array_values($replacements), $subject_raw);
+        $content = str_replace(array_keys($replacements), array_values($replacements), $content_raw);
 
         $headers = array(
             'Content-Type: text/html; charset=UTF-8',
