@@ -2,7 +2,7 @@
 /*
 Plugin Name: Email de Confirmação de Inscrição por Produto
 Description: Envia emails personalizados para diferentes produtos quando o pedido é marcado como concluído
-Version: 1.9.1
+Version: 1.9.3
 Author: Gvntrck
 Requires PHP: 7.4
 */
