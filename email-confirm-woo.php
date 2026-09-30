@@ -2,7 +2,7 @@
 /*
 Plugin Name: Email de Confirmação de Inscrição por Produto
 Description: Envia emails personalizados para diferentes produtos quando o pedido é marcado como concluído
-Version: 1.8
+Version: 1.9
 Author: Gvntrck
 Requires PHP: 7.4
 */
@@ -84,12 +84,24 @@ class Custom_Confirmation_Emails {
             foreach ($input as $key => $value) {
                 $new_input[$key] = array(
                     'product_id' => absint($value['product_id']),
-                    'subject' => sanitize_text_field(wp_unslash($value['subject'])),
-                    'content' => wp_kses_post(wp_unslash($value['content']))
+                    'subject' => sanitize_text_field($value['subject']),
+                    'content' => self::sanitize_email_html($value['content'])
                 );
             }
         }
         return $new_input;
+    }
+
+    // wp_kses_post + tags de documento de email (html, head, style...)
+    private static function sanitize_email_html($html) {
+        $allowed = wp_kses_allowed_html('post');
+        $allowed['html'] = array('lang' => true, 'dir' => true, 'xmlns' => true);
+        $allowed['head'] = array();
+        $allowed['body'] = array('style' => true, 'class' => true, 'bgcolor' => true);
+        $allowed['title'] = array();
+        $allowed['meta'] = array('charset' => true, 'name' => true, 'content' => true, 'http-equiv' => true);
+        $allowed['style'] = array('type' => true, 'media' => true);
+        return wp_kses($html, $allowed);
     }
 
     // Página de configurações
@@ -103,7 +115,7 @@ class Custom_Confirmation_Emails {
                 $configs[$edit_product_id] = array(
                     'product_id' => $edit_product_id,
                     'subject' => sanitize_text_field(wp_unslash($_POST['edit_subject'])),
-                    'content' => wp_kses_post(wp_unslash($_POST['edit_content']))
+                    'content' => self::sanitize_email_html(wp_unslash($_POST['edit_content']))
                 );
                 
                 update_option('custom_confirmation_emails', $configs);
@@ -120,7 +132,7 @@ class Custom_Confirmation_Emails {
                 $configs[$new_product_id] = array(
                     'product_id' => $new_product_id,
                     'subject' => sanitize_text_field(wp_unslash($_POST['new_subject'])),
-                    'content' => wp_kses_post(wp_unslash($_POST['new_content']))
+                    'content' => self::sanitize_email_html(wp_unslash($_POST['new_content']))
                 );
                 
                 update_option('custom_confirmation_emails', $configs);
@@ -171,7 +183,7 @@ class Custom_Confirmation_Emails {
                     <?php foreach ($configs as $product_id => $config): ?>
                     <tr>
                         <td><?php echo $product_id; ?></td>
-                        <td><?php echo $config['subject']; ?></td>
+                        <td><?php echo esc_html($config['subject']); ?></td>
                         <td>
                             <button type="button" class="button edit-config" data-product-id="<?php echo $product_id; ?>" 
                                     data-subject="<?php echo esc_attr($config['subject']); ?>"
@@ -421,9 +433,10 @@ class Custom_Confirmation_Emails {
 
             $product_id = $product->is_type('variation') ? $product->get_parent_id() : $product->get_id();
 
-            if (isset($configs[$product_id]) && !get_post_meta($order_id, '_email_enviado_'.$product_id, true)) {
+            if (isset($configs[$product_id]) && !$order->get_meta('_email_enviado_'.$product_id)) {
                 $this->send_email($order, $configs[$product_id], $product->get_name());
-                update_post_meta($order_id, '_email_enviado_'.$product_id, 'yes');
+                $order->update_meta_data('_email_enviado_'.$product_id, 'yes');
+                $order->save();
             }
         }
     }
@@ -501,7 +514,7 @@ class Custom_Confirmation_Emails {
 
         $email = sanitize_email($_POST['email']);
         $subject_raw = sanitize_text_field(wp_unslash($_POST['subject']));
-        $content_raw = wp_kses_post(wp_unslash($_POST['content']));
+        $content_raw = self::sanitize_email_html(wp_unslash($_POST['content']));
 
         if (!is_email($email)) {
             wp_send_json_error('Email inválido.');
