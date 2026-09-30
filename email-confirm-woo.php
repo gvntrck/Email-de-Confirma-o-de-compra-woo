@@ -9,6 +9,23 @@ Requires PHP: 7.4
 
 if (!defined('ABSPATH')) exit;
 
+
+
+require 'plugin-update-checker/plugin-update-checker.php';
+use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
+
+$myUpdateChecker = PucFactory::buildUpdateChecker(
+	'https://github.com/gvntrck/Email-de-Confirma-o-de-compra-woo/',
+	__FILE__,
+	'email-confirm-woo'
+);
+
+//Set the branch that contains the stable release.
+$myUpdateChecker->setBranch('main');
+
+
+
+
 class Custom_Confirmation_Emails {
 
     public function __construct() {
